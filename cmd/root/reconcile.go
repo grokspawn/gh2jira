@@ -12,9 +12,11 @@
 package root
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
+	"text/tabwriter"
 
 	"github.com/oceanc80/gh2jira/pkg/config"
 	"github.com/oceanc80/gh2jira/pkg/gh"
@@ -25,22 +27,48 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var porcelain bool
-var output string = "json"
-
 const (
-	greenStart  string = "\033[32m"
-	yellowStart string = "\033[33m"
-	redStart    string = "\033[31m"
-	colorReset  string = "\033[0m"
+	greenStart          string = "\033[32m"
+	yellowStart         string = "\033[33m"
+	redStart            string = "\033[31m"
+	colorReset          string = "\033[0m"
+	defaultWorkflowFile string = "workflows.yaml"
 )
 
 func NewReconcileCmd() *cobra.Command {
+	var (
+		output       string = "json"
+		workflowFile string
+	)
 	runCmd := &cobra.Command{
 		Use:   "reconcile",
 		Short: "reconcile github and jira issues",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+
+			var outputFunc func(data interface{}) ([]byte, error)
+
+			switch output {
+			case "yaml":
+				outputFunc = yamlOutput
+			case "json":
+				outputFunc = jsonOutput
+			case "table":
+				fallthrough
+			default:
+				outputFunc = tableOutput
+			}
+
+			if workflowFile == "" {
+				workflowFile = defaultWorkflowFile
+			}
+
+			wfReader, err := os.Open(workflowFile)
+			if err != nil {
+				return fmt.Errorf("failed to open workflow file %q: %w", workflowFile, err)
+			}
+			defer wfReader.Close()
+
 			ff, err := util.NewFlagFeeder(cmd)
 			if err != nil {
 				return err
@@ -83,53 +111,68 @@ func NewReconcileCmd() *cobra.Command {
 				return err
 			}
 
-			results, err := reconcile.Reconcile(cmd.Context(), jql, jc, gc)
+			results, err := reconcile.Reconcile(cmd.Context(), jql, jc, gc, wfReader)
 			if err != nil {
 				return err
 			}
 
-			if porcelain {
-				b, _ := json.MarshalIndent(results, "", "  ")
-				if output == "json" {
-					fmt.Println(string(b))
-				} else {
-					yamlData, err := yaml.JSONToYAML(b)
-					if err != nil {
-						return err
-					}
-					yamlData = append([]byte("---\n"), yamlData...)
-					_, err = os.Stdout.Write(yamlData)
-					if err != nil {
-						return err
-					}
-				}
-			} else {
-				if len(results.Matches) == 0 && len(results.Mismatches) == 0 {
-					fmt.Println("no issues found")
-				} else {
-					fmt.Printf("found %v mismatch / %v match issues\n", len(results.Mismatches), len(results.Matches))
-				}
-
-				for _, pair := range results.Mismatches {
-					var result string = "MISMATCH"
-					var resultColor string = redStart
-					fmt.Printf("%s%s|(%s)%s\n\tstatus (%q\t| %q)\t%s%s%s assignees(%q\t| %q)\n",
-						yellowStart, pair.Jira.Name, pair.Git.Name, colorReset, pair.Jira.Status, pair.Git.Status, resultColor, result, colorReset, pair.Jira.Assignee, pair.Git.Assignee)
-				}
-				for _, pair := range results.Matches {
-					var result string = "MATCH"
-					var resultColor string = greenStart
-					fmt.Printf("%s%s|(%s)%s\n\tstatus (%q\t| %q)\t%s%s%s assignees(%q\t| %q)\n",
-						yellowStart, pair.Jira.Name, pair.Git.Name, colorReset, pair.Jira.Status, pair.Git.Status, resultColor, result, colorReset, pair.Jira.Assignee, pair.Git.Assignee)
-				}
+			b, err := outputFunc(results)
+			if err != nil {
+				return err
 			}
+			os.Stdout.Write(b)
 
 			return nil
 		},
 	}
 
-	runCmd.Flags().BoolVar(&porcelain, "porcelain", false, "display output in an easy-to-parse format for scripts")
-	runCmd.Flags().StringVarP(&output, "output", "o", "json", "output format for porcelain display (json or yaml)")
+	runCmd.Flags().StringVarP(&output, "output", "o", "json", "output format (json, yaml, table)")
+	runCmd.Flags().StringVar(&workflowFile, "workflow-file", "", "file containing the workflow definitions (if not using the default workflow)")
 
 	return runCmd
+}
+
+func yamlOutput(data interface{}) ([]byte, error) {
+	b, _ := json.MarshalIndent(data, "", "  ")
+	yamlData, err := yaml.JSONToYAML(b)
+	if err != nil {
+		return nil, err
+	}
+	yamlData = append([]byte("---\n"), yamlData...)
+	return yamlData, nil
+}
+
+func jsonOutput(data interface{}) ([]byte, error) {
+	return json.MarshalIndent(data, "", "  ")
+}
+
+func tableOutput(data interface{}) ([]byte, error) {
+	results, ok := data.(*reconcile.TypeResults)
+	if !ok {
+		return nil, fmt.Errorf("expected TypeResults, got %T", data)
+	}
+	buf := new(bytes.Buffer)
+	tw := tabwriter.NewWriter(buf, 0, 4, 1, '\t', 0)
+
+	if len(results.Matches) == 0 && len(results.Mismatches) == 0 {
+		fmt.Fprintln(tw, "no issues found")
+	} else {
+		fmt.Fprintf(tw, "found %v mismatch / %v match issues\n", len(results.Mismatches), len(results.Matches))
+	}
+
+	for _, pair := range results.Mismatches {
+		var result string = "MISMATCH"
+		var resultColor string = redStart
+		fmt.Fprintf(tw, "%s%s|(%s)%s\n\tstatus (%q\t| %q)\t%s%s%s assignees(%q\t| %q)\n",
+			yellowStart, pair.Jira.Name, pair.Git.Name, colorReset, pair.Jira.Status, pair.Git.Status, resultColor, result, colorReset, pair.Jira.Assignee, pair.Git.Assignee)
+	}
+	for _, pair := range results.Matches {
+		var result string = "MATCH"
+		var resultColor string = greenStart
+		fmt.Fprintf(tw, "%s%s|(%s)%s\n\tstatus (%q\t| %q)\t%s%s%s assignees(%q\t| %q)\n",
+			yellowStart, pair.Jira.Name, pair.Git.Name, colorReset, pair.Jira.Status, pair.Git.Status, resultColor, result, colorReset, pair.Jira.Assignee, pair.Git.Assignee)
+	}
+	tw.Flush()
+
+	return buf.Bytes(), nil
 }
