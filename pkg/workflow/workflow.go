@@ -13,7 +13,7 @@ package workflow
 
 import (
 	"fmt"
-	"os"
+	"io"
 
 	"sigs.k8s.io/yaml"
 )
@@ -31,12 +31,11 @@ type Workflows struct {
 
 var stateMappings map[string][]string
 
-const workflowfile string = "workflows.yaml"
 const defaultWorkflow string = "jira"
 const schemaName string = "gh2jira.workflows"
 
-func ReadWorkflows() error {
-	b, err := readFile(workflowfile)
+func ReadWorkflows(wf io.Reader) error {
+	b, err := readFile(wf)
 	if err != nil {
 		return err
 	}
@@ -81,6 +80,6 @@ func ValidateState(ghstate string, jirastate string) (bool, error) {
 }
 
 // overrideable func for mocking os.ReadFile
-var readFile = func(file string) ([]byte, error) {
-	return os.ReadFile(file)
+var readFile = func(r io.Reader) ([]byte, error) {
+	return io.ReadAll(r)
 }

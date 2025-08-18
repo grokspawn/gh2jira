@@ -10,7 +10,7 @@ space := $(null) #
 comma := ,
 
 .PHONY: all
-all: unit build
+all: build unit
 
 $(OBJ):
 	$(extra_env) $(GO) build $(extra_flags) -o $@ .
@@ -42,3 +42,5 @@ clean:
 sanity: fmt vet lint
 	git diff --exit-code
 
+secret:
+	kubectl create secret generic tokenstore --from-file=tokenstore

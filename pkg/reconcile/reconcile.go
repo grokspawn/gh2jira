@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"slices"
 	"strconv"
@@ -52,7 +53,7 @@ const (
 	OutcomeMismatch Outcome = "MISMATCH"
 )
 
-func Reconcile(ctx context.Context, jql string, jc *jira.Connection, gc *gh.Connection) (*TypeResults, error) {
+func Reconcile(ctx context.Context, jql string, jc *jira.Connection, gc *gh.Connection, wf io.Reader) (*TypeResults, error) {
 	results := &TypeResults{
 		Matches:    make(PairResults, 0),
 		Mismatches: make(PairResults, 0),
@@ -94,7 +95,7 @@ func Reconcile(ctx context.Context, jql string, jc *jira.Connection, gc *gh.Conn
 
 	// jira.PrintJiraIssues(ctx, jc, jiraIssues)
 
-	err = workflow.ReadWorkflows()
+	err = workflow.ReadWorkflows(wf)
 	if err != nil {
 		return nil, err
 	}
