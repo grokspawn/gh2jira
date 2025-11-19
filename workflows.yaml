@@ -1,12 +1,18 @@
+# Workflow configuration for gh2jira
+# Maps GitHub issue states to Jira status values
+
 schema: gh2jira.workflows
 name: jira
 mappings:
+  # GitHub "open" issues map to these Jira statuses
   - ghstate: "open"
     jstates:
       - "To Do"
       - "In Progress"
       - "New"
       - "Code Review"
+  
+  # GitHub "closed" issues map to these Jira statuses
   - ghstate: "closed"
     jstates:
       - "Done"

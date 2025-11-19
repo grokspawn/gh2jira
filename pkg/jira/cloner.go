@@ -84,7 +84,7 @@ func expandDescription(body, url string) (string, error) {
 	return strings.Join(out, "\n"), nil
 }
 
-func (conn *Connection) Clone(fromIssue *github.Issue, project string, dryRun bool) (*gojira.Issue, error) {
+func (conn *Connection) Clone(fromIssue *github.Issue, project string, issueType string, dryRun bool) (*gojira.Issue, error) {
 	if conn.Client == nil {
 		// user attempted operation w/o connecting to remote first
 		if err := conn.Connect(); err != nil {
@@ -107,7 +107,7 @@ func (conn *Connection) Clone(fromIssue *github.Issue, project string, dryRun bo
 			// },
 			Description: description,
 			Type: gojira.IssueType{
-				Name: "Story",
+				Name: issueType,
 			},
 			Project: gojira.Project{
 				Key: project,

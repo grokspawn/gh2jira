@@ -21,6 +21,7 @@ import (
 type DomainConfig struct {
 	Project   string `json:"project"`
 	Lifecycle string `json:"lifecycle"`
+	IssueType string `json:"issueType,omitempty"`
 }
 
 type Profile struct {

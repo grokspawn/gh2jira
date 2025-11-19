@@ -22,11 +22,13 @@ import (
 const defaultJiraBaseURL string = "https://issues.redhat.com/"
 const defaultGithubProject string = "operator-framework/operator-lifecycle-manager"
 const defaultJiraProject string = "OPECO"
+const defaultJiraIssueType string = "Story"
 
 type Config struct {
 	GithubProject string
 	JiraProject   string
 	JiraBaseUrl   string
+	JiraIssueType string
 	Tokens        *TokenPair
 
 	Flags *util.FlagFeeder
@@ -37,6 +39,7 @@ func NewConfig(ff *util.FlagFeeder) *Config {
 		JiraBaseUrl:   defaultJiraBaseURL,
 		GithubProject: defaultGithubProject,
 		JiraProject:   defaultJiraProject,
+		JiraIssueType: defaultJiraIssueType,
 		Tokens:        &TokenPair{},
 		Flags:         ff,
 	}
@@ -69,6 +72,9 @@ func (c *Config) Read() error {
 			}
 			c.GithubProject = profile.GithubConfig.Project
 			c.JiraProject = profile.JiraConfig.Project
+			if profile.JiraConfig.IssueType != "" {
+				c.JiraIssueType = profile.JiraConfig.IssueType
+			}
 
 			tokenFile = profile.TokenStore
 			if tokenFile != "" {
@@ -98,6 +104,10 @@ func (c *Config) Read() error {
 
 	if c.Flags.JiraBaseURL != "" {
 		c.JiraBaseUrl = c.Flags.JiraBaseURL
+	}
+
+	if c.Flags.JiraIssueType != "" {
+		c.JiraIssueType = c.Flags.JiraIssueType
 	}
 
 	return nil
