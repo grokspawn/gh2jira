@@ -23,6 +23,7 @@ type FlagFeeder struct {
 	GithubProject string
 	JiraProject   string
 	JiraBaseURL   string
+	JiraIssueType string
 }
 
 func NewFlagFeeder(c *cobra.Command) (*FlagFeeder, error) {
@@ -50,6 +51,10 @@ func NewFlagFeeder(c *cobra.Command) (*FlagFeeder, error) {
 	if err != nil {
 		return nil, err
 	}
+	jiraIssueType, err := c.Flags().GetString("jira-issue-type")
+	if err != nil {
+		return nil, err
+	}
 
 	return &FlagFeeder{
 		ProfilesFile:  profilesFile,
@@ -58,5 +63,6 @@ func NewFlagFeeder(c *cobra.Command) (*FlagFeeder, error) {
 		GithubProject: githubProject,
 		JiraProject:   jiraProject,
 		JiraBaseURL:   jiraBaseURL,
+		JiraIssueType: jiraIssueType,
 	}, nil
 }

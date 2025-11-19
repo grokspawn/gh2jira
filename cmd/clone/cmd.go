@@ -76,7 +76,7 @@ WARNING! This will write to your jira instance. Use --dryrun to see what will ha
 					return err
 				}
 
-				_, err = jc.Clone(issue, config.JiraProject, dryRun)
+				_, err = jc.Clone(issue, config.JiraProject, config.JiraIssueType, dryRun)
 				if err != nil {
 					return nil
 				}

@@ -31,6 +31,7 @@ var (
 	ghProject    string
 	jProject     string
 	jUrl         string
+	jIssueType   string
 )
 
 func NewCmd() *cobra.Command {
@@ -54,6 +55,7 @@ func NewCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&ghProject, "github-project", "", "Github project domain to list if not using a profile, e.g.: operator-framework/operator-lifecycle-manager")
 	cmd.PersistentFlags().StringVar(&jProject, "jira-project", "", "Jira project if not using a profile, e.g.: OCPBUGS")
 	cmd.PersistentFlags().StringVar(&jUrl, "jira-base-url", defaultJiraBaseURL, "Jira base URL, e.g.: https://issues.redhat.com")
+	cmd.PersistentFlags().StringVar(&jIssueType, "jira-issue-type", "", "Jira issue type if not using a profile, e.g.: Story, Task, Bug")
 
 	return cmd
 }
