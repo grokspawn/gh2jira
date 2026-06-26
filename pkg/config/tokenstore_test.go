@@ -23,13 +23,28 @@ import (
 var (
 	expectedGhToken   string = "foo"
 	expectedJiraToken string = "bar"
-	mockReadFileGood         = func(file string) ([]byte, error) {
+	expectedEmail     string = "user@example.com"
+	expectedAPIToken  string = "cloud-api-token"
+
+	mockReadFileDC = func(file string) ([]byte, error) {
 		data := fmt.Sprintf(`
 schema: gh2jira.tokenstore
-authTokens: 
- jira: %s
- github: %s
+authTokens:
+  jira:
+    token: %s
+  github: %s
 `, expectedJiraToken, expectedGhToken)
+		return []byte(data), nil
+	}
+	mockReadFileCloud = func(file string) ([]byte, error) {
+		data := fmt.Sprintf(`
+schema: gh2jira.tokenstore
+authTokens:
+  jira:
+    email: %s
+    apiToken: %s
+  github: %s
+`, expectedEmail, expectedAPIToken, expectedGhToken)
 		return []byte(data), nil
 	}
 	mockReadFileBadFile = func(file string) ([]byte, error) {
@@ -38,7 +53,7 @@ authTokens:
 	mockReadFileBadYaml = func(file string) ([]byte, error) {
 		data := `
 schema: gh2jira.tokenstore
-authTokens: 
+authTokens:
 jira= bar
 github: foo
 `
@@ -47,16 +62,39 @@ github: foo
 	mockReadFileMissingGhToken = func(file string) ([]byte, error) {
 		data := `
 schema: gh2jira.tokenstore
-authTokens: 
-jira: foo
+authTokens:
+  jira:
+    token: foo
 `
 		return []byte(data), nil
 	}
-	mockReadFileMissingJiraToken = func(file string) ([]byte, error) {
+	mockReadFileMissingJira = func(file string) ([]byte, error) {
 		data := `
 schema: gh2jira.tokenstore
-authTokens: 
-github: bar
+authTokens:
+  github: bar
+`
+		return []byte(data), nil
+	}
+	mockReadFileBothModes = func(file string) ([]byte, error) {
+		data := `
+schema: gh2jira.tokenstore
+authTokens:
+  jira:
+    token: dc-token
+    email: user@example.com
+    apiToken: cloud-token
+  github: bar
+`
+		return []byte(data), nil
+	}
+	mockReadFileCloudPartial = func(file string) ([]byte, error) {
+		data := `
+schema: gh2jira.tokenstore
+authTokens:
+  jira:
+    email: user@example.com
+  github: bar
 `
 		return []byte(data), nil
 	}
@@ -64,39 +102,58 @@ github: bar
 
 func TestReadFile(t *testing.T) {
 	tests := []struct {
-		name      string
-		mock      func(file string) ([]byte, error)
-		ghtoken   string
-		jiratoken string
-		wantErr   bool
+		name    string
+		mock    func(file string) ([]byte, error)
+		audit   func(t *testing.T, ts *TokenStore)
+		wantErr bool
 	}{
 		{
-			name:      "ReadFileGood",
-			mock:      mockReadFileGood,
-			ghtoken:   expectedGhToken,
-			jiratoken: expectedJiraToken,
-			wantErr:   false,
+			name: "DC auth with token",
+			mock: mockReadFileDC,
+			audit: func(t *testing.T, ts *TokenStore) {
+				require.Equal(t, expectedGhToken, ts.Tokens.GithubToken)
+				require.Equal(t, expectedJiraToken, ts.Tokens.JiraAuth.Token)
+				require.False(t, ts.Tokens.JiraAuth.IsCloud())
+			},
 		},
 		{
-			name:    "ReadFileBadFile",
+			name: "Cloud auth with email and apiToken",
+			mock: mockReadFileCloud,
+			audit: func(t *testing.T, ts *TokenStore) {
+				require.Equal(t, expectedGhToken, ts.Tokens.GithubToken)
+				require.Equal(t, expectedEmail, ts.Tokens.JiraAuth.Email)
+				require.Equal(t, expectedAPIToken, ts.Tokens.JiraAuth.APIToken)
+				require.True(t, ts.Tokens.JiraAuth.IsCloud())
+			},
+		},
+		{
+			name:    "bad file",
 			mock:    mockReadFileBadFile,
 			wantErr: true,
 		},
 		{
-			name:    "ReadFileBadYaml",
+			name:    "bad yaml",
 			mock:    mockReadFileBadYaml,
 			wantErr: true,
 		},
 		{
-			name:      "ReadFileMissingGhToken",
-			mock:      mockReadFileMissingGhToken,
-			jiratoken: expectedGhToken,
-			wantErr:   true,
+			name:    "missing github token",
+			mock:    mockReadFileMissingGhToken,
+			wantErr: true,
 		},
 		{
-			name:    "ReadFileMissingJiraToken",
-			mock:    mockReadFileMissingJiraToken,
-			ghtoken: expectedGhToken,
+			name:    "missing jira auth entirely",
+			mock:    mockReadFileMissingJira,
+			wantErr: true,
+		},
+		{
+			name:    "both DC and Cloud set",
+			mock:    mockReadFileBothModes,
+			wantErr: true,
+		},
+		{
+			name:    "cloud partial - email without apiToken",
+			mock:    mockReadFileCloudPartial,
 			wantErr: true,
 		},
 	}
@@ -104,11 +161,14 @@ func TestReadFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			readFile = tt.mock
-			token, err := ReadTokenStore("")
-			if !tt.wantErr {
+			ts, err := ReadTokenStore("")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
 				require.NoError(t, err)
-				require.Equal(t, expectedGhToken, token.Tokens.GithubToken)
-				require.Equal(t, expectedJiraToken, token.Tokens.JiraToken)
+				if tt.audit != nil {
+					tt.audit(t, ts)
+				}
 			}
 		})
 	}

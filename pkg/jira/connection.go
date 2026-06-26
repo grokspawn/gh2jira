@@ -1,30 +1,18 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package jira
 
 import (
+	"context"
 	"errors"
 
-	gojira "github.com/andygrunwald/go-jira"
+	"github.com/oceanc80/gh2jira/pkg/config"
 )
 
 type ConnectionOption func(*Connection) error
 
 type Connection struct {
-	transport *gojira.BearerAuthTransport
-	Client    *gojira.Client
-	token     string
-	baseUri   string
+	jiraClient JiraClient
+	auth       config.JiraAuth
+	baseUri    string
 }
 
 func WithBaseURI(u string) ConnectionOption {
@@ -34,9 +22,9 @@ func WithBaseURI(u string) ConnectionOption {
 	}
 }
 
-func WithAuthToken(t string) ConnectionOption {
+func WithAuth(a config.JiraAuth) ConnectionOption {
 	return func(c *Connection) error {
-		c.token = t
+		c.auth = a
 		return nil
 	}
 }
@@ -50,30 +38,52 @@ func NewConnection(options ...ConnectionOption) (*Connection, error) {
 			return nil, err
 		}
 	}
-	if c.token == "" {
-		return nil, errors.New("cannot access jira without a token")
-	}
 	if c.baseUri == "" {
 		return nil, errors.New("no base URI for jira")
 	}
-	c.transport = &gojira.BearerAuthTransport{Token: c.token}
+
+	hasToken := c.auth.Token != ""
+	hasCloud := c.auth.Email != "" && c.auth.APIToken != ""
+	if !hasToken && !hasCloud {
+		return nil, errors.New("cannot access jira without credentials")
+	}
 
 	return c, nil
 }
 
 func (c *Connection) Connect() error {
-	if c.transport == nil {
-		return errors.New("transport is not set")
+	if c.jiraClient != nil {
+		return nil
 	}
-	if c.Client == nil {
-		gc, err := gojira.NewClient(c.transport.Client(), c.baseUri)
+
+	if c.auth.IsCloud() {
+		client, err := newCloudClient(c.baseUri, c.auth.Email, c.auth.APIToken)
 		if err != nil {
 			return err
 		}
-		if gc == nil {
-			return errors.New("unable to create github client")
+		c.jiraClient = client
+	} else {
+		client, err := newOnpremClient(c.baseUri, c.auth.Token)
+		if err != nil {
+			return err
 		}
-		c.Client = gc
+		c.jiraClient = client
 	}
 	return nil
+}
+
+func (c *Connection) SearchIssues(ctx context.Context, jql string) ([]Issue, error) {
+	return c.jiraClient.SearchIssues(ctx, jql)
+}
+
+func (c *Connection) CreateIssue(ctx context.Context, issue *Issue) (*Issue, error) {
+	return c.jiraClient.CreateIssue(ctx, issue)
+}
+
+func (c *Connection) AddRemoteLink(ctx context.Context, issueID string, link *RemoteLink) error {
+	return c.jiraClient.AddRemoteLink(ctx, issueID, link)
+}
+
+func (c *Connection) GetRemoteLinks(ctx context.Context, issueKey string) ([]RemoteLink, error) {
+	return c.jiraClient.GetRemoteLinks(ctx, issueKey)
 }

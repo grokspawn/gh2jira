@@ -120,7 +120,7 @@ var readTokens = func(filename string) (*TokenPair, error) {
 	}
 	return &TokenPair{
 		GithubToken: rawTokens.Tokens.GithubToken,
-		JiraToken:   rawTokens.Tokens.JiraToken,
+		JiraAuth:    rawTokens.Tokens.JiraAuth,
 	}, nil
 }
 

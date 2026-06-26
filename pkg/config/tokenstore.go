@@ -22,9 +22,19 @@ import (
 
 const schemaName string = "gh2jira.tokenstore"
 
+type JiraAuth struct {
+	Token    string `json:"token,omitempty"`
+	Email    string `json:"email,omitempty"`
+	APIToken string `json:"apiToken,omitempty"`
+}
+
+func (j JiraAuth) IsCloud() bool {
+	return j.Email != "" && j.APIToken != ""
+}
+
 type TokenPair struct {
-	JiraToken   string `json:"jira"`
-	GithubToken string `json:"github"`
+	JiraAuth    JiraAuth `json:"jira"`
+	GithubToken string   `json:"github"`
 }
 
 type TokenStore struct {
@@ -49,8 +59,17 @@ func ReadTokenStore(f string) (*TokenStore, error) {
 	if c.Tokens.GithubToken == "" {
 		return nil, errors.New("missing required github token")
 	}
-	if c.Tokens.JiraToken == "" {
-		return nil, errors.New("missing required jira token")
+
+	hasToken := c.Tokens.JiraAuth.Token != ""
+	hasCloud := c.Tokens.JiraAuth.Email != "" || c.Tokens.JiraAuth.APIToken != ""
+	if hasToken && hasCloud {
+		return nil, errors.New("jira auth: specify either token (datacenter) or email+apiToken (cloud), not both")
+	}
+	if !hasToken && !hasCloud {
+		return nil, errors.New("missing required jira auth: provide token (datacenter) or email+apiToken (cloud)")
+	}
+	if hasCloud && (c.Tokens.JiraAuth.Email == "" || c.Tokens.JiraAuth.APIToken == "") {
+		return nil, errors.New("jira cloud auth requires both email and apiToken")
 	}
 
 	return &c, nil
