@@ -41,15 +41,15 @@ profiles:
 		return nil, errors.New("mock profiles read error")
 	}
 
-	// Mock readTokens function for testing
 	mockReadTokensSuccess = func(filename string) (*TokenPair, error) {
 		return &TokenPair{
 			GithubToken: "mock_github_token",
-			JiraToken:   "mock_jira_token",
+			JiraAuth: JiraAuth{
+				Token: "mock_jira_token",
+			},
 		}, nil
 	}
 
-	// Mock readTokens function for testing
 	mockReadTokensError = func(filename string) (*TokenPair, error) {
 		return nil, errors.New("mock tokens read error")
 	}
@@ -80,7 +80,7 @@ func TestConfig_Read(t *testing.T) {
 				require.Equal(t, "operator-framework/operator-lifecycle-manager", c.GithubProject)
 				require.Equal(t, defaultJiraProject, c.JiraProject)
 				require.Equal(t, "mock_github_token", c.Tokens.GithubToken)
-				require.Equal(t, "mock_jira_token", c.Tokens.JiraToken)
+				require.Equal(t, "mock_jira_token", c.Tokens.JiraAuth.Token)
 			},
 		},
 		{
@@ -99,7 +99,7 @@ func TestConfig_Read(t *testing.T) {
 				require.Equal(t, "testdomain/testproject", c.GithubProject)
 				require.Equal(t, "TESTY", c.JiraProject)
 				require.Equal(t, "mock_github_token", c.Tokens.GithubToken)
-				require.Equal(t, "mock_jira_token", c.Tokens.JiraToken)
+				require.Equal(t, "mock_jira_token", c.Tokens.JiraAuth.Token)
 			},
 		},
 		{
@@ -118,7 +118,7 @@ func TestConfig_Read(t *testing.T) {
 				require.Equal(t, "overridedomain/overrideproject", c.GithubProject)
 				require.Equal(t, "OVER", c.JiraProject)
 				require.Equal(t, "mock_github_token", c.Tokens.GithubToken)
-				require.Equal(t, "mock_jira_token", c.Tokens.JiraToken)
+				require.Equal(t, "mock_jira_token", c.Tokens.JiraAuth.Token)
 			},
 		},
 		{

@@ -13,24 +13,43 @@ A utility that allows you to retrieve and reconcile relationships between Github
 
 ## Getting Started
 ### TokenStore Setup
-The gh2jira utility requires a TokenStore configuration file containing GitHub and Jira access tokens.  By default this is `tokenstore.yaml` and follows the schema:
+The gh2jira utility requires a TokenStore configuration file containing GitHub and Jira access tokens. By default this is `tokenstore.yaml` and follows the schema below. The Jira credentials differ depending on whether you are connecting to a Jira Data Center or Jira Cloud instance.
+
+#### Jira Data Center
 
 ```yaml
 schema: gh2jira.tokenstore
 authTokens:
-  jira: foo
-  github: baz
+  jira:
+    token: your-personal-access-token
+  github: your-github-token
 ```
 
+#### Jira Cloud
+
+```yaml
+schema: gh2jira.tokenstore
+authTokens:
+  jira:
+    email: you@example.com
+    apiToken: your-atlassian-api-token
+  github: your-github-token
+```
+
+The tool auto-detects the mode based on which fields are present. You must provide either `token` (Data Center) or both `email` and `apiToken` (Cloud), but not both.
 
 ### Creating Tokens
 #### Setting Up Github Token
 1. Follow the instructions [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-personal-access-token-classic) to create a personal access token, being sure to only limit the scope of the token to "public_repo" and "read:project".
 2. Save to your TokenStore file under the key `authTokens.github`
 
-#### Setting Up Jira Personal Access Token
+#### Setting Up Jira Token (Data Center)
 1. Follow the instructions [here](https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html#UsingPersonalAccessTokens-CreatingPATsintheapplication) to set up a Personal Access Token.
-2. Save to your TokenStore file under the key `authTokens.jira`
+2. Save to your TokenStore file under the key `authTokens.jira.token`
+
+#### Setting Up Jira Token (Cloud)
+1. Go to [Atlassian API Token Management](https://id.atlassian.com/manage-profile/security/api-tokens) and create an API token.
+2. Save your Atlassian account email under `authTokens.jira.email` and the API token under `authTokens.jira.apiToken` in your TokenStore file.
 
 ### Profiles
 Profiles are a mechanism to store associated GitHub domains - Jira projects for easy reference, as well as the TokenStore to be used by each (defaulting to `tokenstore.yaml` if unspecified).  By default this is `profiles.yaml` and follows this schema:

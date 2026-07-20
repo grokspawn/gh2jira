@@ -1,31 +1,15 @@
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package jira
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	gojira "github.com/andygrunwald/go-jira"
 	"github.com/google/go-github/v60/github"
 )
 
-// getDomainFromIssueUrl extracts the github domain from the issue HTML URL
-// assumes that the suffix is in the format "/domain/project/issues/123"
-// splits the string on "/", pops off the last two elements, pops off the front up to the domain element, and returns the joined remaining elements
 func getDomainFromIssueUrl(url string) string {
 	if url == "" {
 		return ""
@@ -50,10 +34,6 @@ func getIssueNumberFromIssueUrl(url string) string {
 	return parts[len(parts)-1]
 }
 
-// expandDescription expands checklist links to other issues to jira link format
-// assumes the input checklist lines have the format "- [ ] #123"
-// replaces those lines in the general format " * [domain/project/issues/123|url]"
-// makes a special effort to preserve any trailing text after the issue number
 func expandDescription(body, url string) (string, error) {
 	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
 	var out []string
@@ -62,11 +42,9 @@ func expandDescription(body, url string) (string, error) {
 
 	for _, line := range lines {
 		if matcher.FindStringIndex(line) != nil {
-			// extract the linked issue number
 			parts := strings.Split(line, "#")
 			elements := strings.Split(parts[1], " ")
 			issue := elements[0]
-			// grab any trailing text after the issue number
 			var trailer string
 			if len(elements) > 1 {
 				trailer = strings.Join(elements[1:], " ")
@@ -84,9 +62,8 @@ func expandDescription(body, url string) (string, error) {
 	return strings.Join(out, "\n"), nil
 }
 
-func (conn *Connection) Clone(fromIssue *github.Issue, project string, issueType string, dryRun bool) (*gojira.Issue, error) {
-	if conn.Client == nil {
-		// user attempted operation w/o connecting to remote first
+func (conn *Connection) Clone(ctx context.Context, fromIssue *github.Issue, project string, issueType string, dryRun bool) (*Issue, error) {
+	if conn.jiraClient == nil {
 		if err := conn.Connect(); err != nil {
 			return nil, err
 		}
@@ -97,26 +74,20 @@ func (conn *Connection) Clone(fromIssue *github.Issue, project string, issueType
 		return nil, err
 	}
 
-	ji := gojira.Issue{
-		Fields: &gojira.IssueFields{
-			// Assignee: &gojira.User{
-			//     Name: "myuser",
-			// },
-			// Reporter: &gojira.User{
-			//     Name: "youruser",
-			// },
+	ji := Issue{
+		Fields: &IssueFields{
 			Description: description,
-			Type: gojira.IssueType{
+			Type: IssueType{
 				Name: issueType,
 			},
-			Project: gojira.Project{
+			Project: Project{
 				Key: project,
 			},
 			Summary: fmt.Sprintf("[UPSTREAM] %s #%d", fromIssue.GetTitle(), fromIssue.GetNumber()),
 		},
 	}
 
-	var daIssue *gojira.Issue
+	var daIssue *Issue
 
 	if dryRun {
 		fmt.Println("\n############# DRY RUN MODE #############")
@@ -126,20 +97,13 @@ func (conn *Connection) Clone(fromIssue *github.Issue, project string, issueType
 		fmt.Println("Description:")
 		fmt.Printf("%s\n", ji.Fields.Description)
 		fmt.Printf("Domain: %s\n", getDomainFromIssueUrl(fromIssue.GetHTMLURL()))
-		// b, _ := json.MarshalIndent(*fromIssue, "", "  ")
-		// fmt.Printf("issue details: %s\n", b)
 		fmt.Println("\n############# DRY RUN MODE #############")
 	} else {
 		fmt.Printf("Cloning issue #%d to jira project board: %s\n\n", fromIssue.GetNumber(), ji.Fields.Project.Key)
-		var err error
 
-		daIssue, response, err := conn.Client.Issue.Create(&ji)
+		daIssue, err = conn.CreateIssue(ctx, &ji)
 		if err != nil {
 			fmt.Printf("Error cloning issue: %v\n", err)
-			reqBody, ioerr := io.ReadAll(response.Response.Body)
-			if ioerr == nil {
-				fmt.Println(string(reqBody))
-			}
 			return daIssue, err
 		}
 
@@ -147,9 +111,8 @@ func (conn *Connection) Clone(fromIssue *github.Issue, project string, issueType
 			fmt.Printf("Issue cloned; see %s\n",
 				fmt.Sprintf(filepath.Join(conn.baseUri, "browse/%s"), daIssue.Key))
 		}
-		// Add remote link to the upstream issue
-		if _, _, err = conn.Client.Issue.AddRemoteLink(daIssue.ID, &gojira.RemoteLink{
-			Object: &gojira.RemoteLinkObject{
+		if err = conn.AddRemoteLink(ctx, daIssue.ID, &RemoteLink{
+			Object: &RemoteLinkObject{
 				URL:   fromIssue.GetHTMLURL(),
 				Title: fmt.Sprintf("%s#%v", getDomainFromIssueUrl(fromIssue.GetHTMLURL()), fromIssue.GetNumber()),
 			},

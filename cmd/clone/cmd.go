@@ -58,7 +58,7 @@ WARNING! This will write to your jira instance. Use --dryrun to see what will ha
 
 			jc, err := jira.NewConnection(
 				jira.WithBaseURI(config.JiraBaseUrl),
-				jira.WithAuthToken(config.Tokens.JiraToken),
+				jira.WithAuth(config.Tokens.JiraAuth),
 			)
 			if err != nil {
 				return err
@@ -76,7 +76,7 @@ WARNING! This will write to your jira instance. Use --dryrun to see what will ha
 					return err
 				}
 
-				_, err = jc.Clone(issue, config.JiraProject, config.JiraIssueType, dryRun)
+				_, err = jc.Clone(cmd.Context(), issue, config.JiraProject, config.JiraIssueType, dryRun)
 				if err != nil {
 					return nil
 				}

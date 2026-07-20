@@ -96,7 +96,7 @@ func NewReconcileCmd() *cobra.Command {
 
 			jc, err := jira.NewConnection(
 				jira.WithBaseURI(config.JiraBaseUrl),
-				jira.WithAuthToken(config.Tokens.JiraToken),
+				jira.WithAuth(config.Tokens.JiraAuth),
 			)
 			if err != nil {
 				return err
